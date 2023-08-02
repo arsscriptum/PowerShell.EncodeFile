@@ -220,7 +220,7 @@ function Convert-ToSmallerArray {
         if ($end -ge $BigArray.count) {$end = $BigArray.count}
         $ReturnedArray+=,@($BigArray[$start..$end])
     }
-    return ,$ReturnedArray
+    return $ReturnedArray
 }
 
 
@@ -242,54 +242,60 @@ function ConvertFrom-HeaderBlock {
         [String]$Path
         
     )
+    try{
+        Write-Verbose "[ConvertFrom-HeaderBlock] `"$Path`" Type $Type"
+        [string]$FileStringData = Get-Content -Path "$Path" -Encoding utf8
+        $index = $FileStringData.IndexOf($Global:StartTag)
+        $endindex = $FileStringData.IndexOf($Global:EndTag)
+        $index += 34
 
-    Write-Verbose "[ConvertFrom-HeaderBlock] `"$Path`" Type $Type"
-    [string]$FileStringData = Get-Content -Path "$Path" -Encoding utf8
-    $index = $FileStringData.IndexOf($Global:StartTag)
-    $endindex = $FileStringData.IndexOf($Global:EndTag)
-    $index += 34
+        [char[]] $CArray = $FileStringData.ToCharArray() 
+        $iMax = $CArray.Count
 
-    [char[]] $CArray = $FileStringData.ToCharArray() 
-    $iMax = $CArray.Count
+        Write-Verbose "index $index "
+        Write-Verbose "endindex $endindex "
+        Write-Verbose "iMax $iMax "
 
-    Write-Verbose "index $index "
-    Write-Verbose "endindex $endindex "
-    Write-Verbose "iMax $iMax "
-
-    For($i = $index ; $i -lt $endindex ; $i++){
-        if(($CArray[$i] -ne ' ') -and ($CArray[$i])){
-            [char]$c = $CArray[$i]
-            $CompleteString += $c
+        For($i = $index ; $i -lt $endindex ; $i++){
+            if(($CArray[$i] -ne ' ') -and ($CArray[$i])){
+                [char]$c = $CArray[$i]
+                $CompleteString += $c
+            }
         }
+
+        $Valid = ([string]::IsNullOrEmpty($CompleteString) -eq $False)
+
+        if($False -eq $Valid){ throw "cannot find embedded data in file" }
+        $CompleteStringLen = $CompleteString.Length
+        Write-Verbose "[ConvertFrom-HeaderBlock]  CompleteString Length $CompleteStringLen"
+        [byte[]]$ScriptBlockCompressed = Convert-Base64ToBytes($CompleteString)
+        [Byte[]]$ScriptBlockEncoded = Expand-CompressedBytes -CompressedBytes $ScriptBlockCompressed
+       
+        $HeaderSize = 1 + 8 + 8
+
+        [System.IO.MemoryStream]$MemoryStream = [System.IO.MemoryStream]::new($ScriptBlockEncoded)   
+        [System.IO.BinaryReader]$BinaryReader = [System.IO.BinaryReader]::new($MemoryStream)
+        [bool]$IsBinary = $BinaryReader.ReadBoolean()
+        [UInt64]$DataBufferSize = $BinaryReader.ReadUInt64()
+        [Byte[]]$PlaceHolder = $BinaryReader.ReadBytes(8)
+        [Byte[]]$RawByteArray = $BinaryReader.ReadBytes($DataBufferSize)
+
+        Write-Verbose "[ConvertFrom-HeaderBlock]  ScriptBlock Compressed Size $($ScriptBlockCompressed.Count)"
+        Write-Verbose "[ConvertFrom-HeaderBlock]  ScriptBlock Expanded   Size $($ScriptBlockEncoded.Count)"
+        Write-Verbose "[ConvertFrom-HeaderBlock]  IsBinary               $IsBinary"
+        Write-Verbose "[ConvertFrom-HeaderBlock]  DataBufferSize         $DataBufferSize"
+
+        if($IsBinary -eq $False){
+            # Byte array to String
+            [System.Text.Encoding] $Encoding = [System.Text.Encoding]::UTF8
+            [string]$s = $Encoding.GetString($RawByteArray)
+            return $s
+        }
+
+        return $RawByteArray 
+    }catch{
+        Write-Error "$_"
     }
-
-    $CompleteStringLen = $CompleteString.Length
-    Write-Verbose "[ConvertFrom-HeaderBlock]  CompleteString Length $CompleteStringLen"
-    [byte[]]$ScriptBlockCompressed = Convert-Base64ToBytes($CompleteString)
-    [Byte[]]$ScriptBlockEncoded = Expand-CompressedBytes -CompressedBytes $ScriptBlockCompressed
-   
-    $HeaderSize = 1 + 8 + 8
-
-    [System.IO.MemoryStream]$MemoryStream = [System.IO.MemoryStream]::new($ScriptBlockEncoded)   
-    [System.IO.BinaryReader]$BinaryReader = [System.IO.BinaryReader]::new($MemoryStream)
-    [bool]$IsBinary = $BinaryReader.ReadBoolean()
-    [UInt64]$DataBufferSize = $BinaryReader.ReadUInt64()
-    [Byte[]]$PlaceHolder = $BinaryReader.ReadBytes(8)
-    [Byte[]]$RawByteArray = $BinaryReader.ReadBytes($DataBufferSize)
-
-    Write-Verbose "[ConvertFrom-HeaderBlock]  ScriptBlock Compressed Size $($ScriptBlockCompressed.Count)"
-    Write-Verbose "[ConvertFrom-HeaderBlock]  ScriptBlock Expanded   Size $($ScriptBlockEncoded.Count)"
-    Write-Verbose "[ConvertFrom-HeaderBlock]  IsBinary               $IsBinary"
-    Write-Verbose "[ConvertFrom-HeaderBlock]  DataBufferSize         $DataBufferSize"
-
-    if($IsBinary -eq $False){
-        # Byte array to String
-        [System.Text.Encoding] $Encoding = [System.Text.Encoding]::UTF8
-        [string]$s = $Encoding.GetString($RawByteArray)
-        return $s
-    }
-
-    return $RawByteArray 
 }
 
 
@@ -313,45 +319,48 @@ function ConvertTo-HeaderBlock {
         [uint32]$SizeSections = 65
         
     )
-    $HeaderSize = 1 + 8 + 8
-    [bool]$IsBinary = ((Get-FileEncoding -Path $Path ) -eq 'binary')
-    [Byte[]]$ScriptBlockEncoded = Get-ContentBytes -Path $Path
-    $ScriptBlockEncodedSize = $ScriptBlockEncoded.Count
-    $BufferSize = $ScriptBlockEncodedSize + $HeaderSize
-    [Byte[]]$Buffer = [Byte[]]::new($BufferSize)
+    try{
+        $HeaderSize = 1 + 8 + 8
+        [bool]$IsBinary = ((Get-FileEncoding -Path $Path ) -eq 'binary')
+        [Byte[]]$ScriptBlockEncoded = Get-ContentBytes -Path $Path
+        $ScriptBlockEncodedSize = $ScriptBlockEncoded.Count
+        $BufferSize = $ScriptBlockEncodedSize + $HeaderSize
+        [Byte[]]$Buffer = [Byte[]]::new($BufferSize)
 
-    Write-Verbose "[ConvertTo-HeaderBlock] `"$Path`" Binary $IsBinary"
+        Write-Verbose "[ConvertTo-HeaderBlock] `"$Path`" Binary $IsBinary"
 
-    [System.IO.MemoryStream]$MemoryStream = [System.IO.MemoryStream]::new($Buffer,$True)   
-    [System.IO.BinaryWriter]$BinaryWriter = [System.IO.BinaryWriter]::new($MemoryStream)
- 
-   
-    $BinaryWriter.Write($IsBinary -as [bool]) # 1
-    $BinaryWriter.Write($ScriptBlockEncodedSize -as [UInt64]) # 8
-    [byte[]]$PlaceHolder = [byte[]]::new(8)
-    $BinaryWriter.Write($PlaceHolder)
-    $BinaryWriter.Write($ScriptBlockEncoded)
-    $BinaryWriter.Close()
-    
-    [Byte[]]$DataWithHeader = $MemoryStream.ToArray()
+        [System.IO.MemoryStream]$MemoryStream = [System.IO.MemoryStream]::new($Buffer,$True)   
+        [System.IO.BinaryWriter]$BinaryWriter = [System.IO.BinaryWriter]::new($MemoryStream)
+     
+       
+        $BinaryWriter.Write($IsBinary -as [bool]) # 1
+        $BinaryWriter.Write($ScriptBlockEncodedSize -as [UInt64]) # 8
+        [byte[]]$PlaceHolder = [byte[]]::new(8)
+        $BinaryWriter.Write($PlaceHolder)
+        $BinaryWriter.Write($ScriptBlockEncoded)
+        $BinaryWriter.Close()
+        
+        [Byte[]]$DataWithHeader = $MemoryStream.ToArray()
 
-    [Byte[]]$ScriptBlockCompressed = Compress-ByteArray -ByteArray $DataWithHeader -IsBinary $IsBinary
-    [string]$ScriptBase64 = Convert-BytesToBase64($ScriptBlockCompressed)
+        [Byte[]]$ScriptBlockCompressed = Compress-ByteArray -ByteArray $DataWithHeader -IsBinary $IsBinary
+        [string]$ScriptBase64 = Convert-BytesToBase64($ScriptBlockCompressed)
 
-    Write-Verbose "[ConvertTo-HeaderBlock]  ScriptBlock Compressed Size $($ScriptBlockCompressed.Count)"
-    Write-Verbose "[ConvertTo-HeaderBlock]  ScriptBlock Expanded   Size $($ScriptBlockEncoded.Count)"
-    Write-Verbose "[ConvertTo-HeaderBlock]  ScriptBlock Base 64    Size $($ScriptBase64.Length)"
-    
-    [char[]] $CArray = $ScriptBase64.ToCharArray() 
-    $Parts = Convert-ToSmallerArray -BigArray $CArray -RequestedSize $SizeSections
-    Write-Verbose "[ConvertTo-HeaderBlock]  Convert-ToSmallerArray RequestedSize $SizeSections"
-    [string]$HeaderData =  $Global:HeaderStart
-    $Parts | % { $HeaderData += "$_`n" }
-    $HeaderData += $Global:HeaderEnd
+        Write-Verbose "[ConvertTo-HeaderBlock]  ScriptBlock Compressed Size $($ScriptBlockCompressed.Count)"
+        Write-Verbose "[ConvertTo-HeaderBlock]  ScriptBlock Expanded   Size $($ScriptBlockEncoded.Count)"
+        Write-Verbose "[ConvertTo-HeaderBlock]  ScriptBlock Base 64    Size $($ScriptBase64.Length)"
+        
+        [char[]] $CArray = $ScriptBase64.ToCharArray() 
+        $Parts = Convert-ToSmallerArray -BigArray $CArray -RequestedSize $SizeSections
+        Write-Verbose "[ConvertTo-HeaderBlock]  Convert-ToSmallerArray RequestedSize $SizeSections"
+        [string]$HeaderData =  $Global:HeaderStart
+        $Parts | % { $HeaderData += "$_`n" }
+        $HeaderData += $Global:HeaderEnd
 
-    return $HeaderData
+        return $HeaderData
+    }catch{
+        Write-Error "$_"
+    }
 }
-
 
 
 function Split-HeaderBlockData {

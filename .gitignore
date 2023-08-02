@@ -12,3 +12,4 @@ original
 original/**
 extracted
 extracted/**
+scripts/Test-ShowImageDialog.ps1

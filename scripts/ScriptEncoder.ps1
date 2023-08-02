@@ -135,24 +135,46 @@ class EncodedDataFile {
         .Parameter Path
             Directory where  files are extracted
     #>
-    [void]Deserialize([string]$Path) {
+    [void]Deserialize() {
         try{
             if([string]::IsNullOrEmpty($Path)){
                 $Path = (Get-Location).Path
             }
+            Write-Host "[Deserialize] `"$Path`"" -f Red
             if(-not(Test-Path $Path)){ $Null = mkdir $Path -Force -EA Ignore }
             [string]$ScriptString = $this.DecompressBytes($this.ScriptBytes)
-            [string]$ScriptLocalFile = "{0}\{1}" -f "$Path", $this.ScriptFileName
-            Set-Content -Path $ScriptLocalFile -Value $ScriptString -Encoding utf8
+            [string]$ScriptLocalFile = "{0}" -f $this.ScriptFilePath
+            
+            Set-Content -Path $ScriptLocalFile -Value $ScriptString -Encoding utf8 -Force
 
             [string]$DataString = $this.DecompressBytes($this.DataBytes)
-            [string]$DataLocalFile = "{0}\{1}" -f "$Path", $this.DataFileName
-            Set-Content -Path $DataLocalFile -Value $DataString -Encoding utf8
+            [string]$DataLocalFile = "{0}" -f $this.DataFilePath
+            
+            Set-Content -Path $DataLocalFile -Value $DataString -Encoding utf8 -Force
         }catch{
             Write-Error "$_"
         }  
     }
+    [void]DeserializeTo([string]$Path) {
+        try{
+            if([string]::IsNullOrEmpty($Path)){
+                $Path = (Get-Location).Path
+            }
+            Write-Host "[Deserialize] `"$Path`"" -f Red
+            if(-not(Test-Path $Path)){ $Null = mkdir $Path -Force -EA Ignore }
+            [string]$ScriptString = $this.DecompressBytes($this.ScriptBytes)
+            [string]$ScriptLocalFile = "{0}\{1}" -f "$Path", $this.ScriptFileName
+            
+            Set-Content -Path $ScriptLocalFile -Value $ScriptString -Encoding utf8 -Force
 
+            [string]$DataString = $this.DecompressBytes($this.DataBytes)
+            [string]$DataLocalFile = "{0}\{1}" -f "$Path", $this.DataFileName
+            
+            Set-Content -Path $DataLocalFile -Value $DataString -Encoding utf8 -Force
+        }catch{
+            Write-Error "$_"
+        }  
+    }
     <#
         .Synopsis
             Get a String representation of the class
@@ -228,5 +250,61 @@ DataFileName      = {7}
             Write-Error "$_"
         }  
         return $Ret
+    }
+}
+
+
+
+
+function New-EncodedFile { 
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ScriptPath,
+        [Parameter(Mandatory=$true)]
+        [string]$DataFilePath
+    ) 
+
+    Try{
+       $ec = [EncodedDataFile]::new()
+        Write-Verbose "Create encoded file with `n - `"$ScriptPath`"`n - `"$DataFilePath`""
+        $Null = $ec.Serialize("$ScriptPath","$DataFilePath")
+        
+        $SavedDataFile = "$ScriptPath" += '.encoded'
+        $SaveSuccess = $ec.Save($SavedDataFile)
+        Write-Verbose "Saved with $SavedDataFile => $SaveSuccess"
+        
+        return $SavedDataFile
+
+    }catch{
+        Write-Error $_ 
+    }
+}
+
+function Restore-EncodedFiles { 
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Path,
+        [Parameter(Mandatory=$false)]
+        [string]$DestinationPath,
+        [Parameter(Mandatory=$false)]
+        [switch]$OverwriteOriginalFiles
+    ) 
+
+    Try{
+        $ec = [EncodedDataFile]::new()
+        $LoadSuccess = $ec.Load($Path)
+        Write-Verbose "Loaded $Path => $LoadSuccess"
+        if($OverwriteOriginalFiles){
+            $Null = $ec.Deserialize()
+        }else{
+            if([string]::IsNullOrEmpty($Path) -eq $True){
+                $DestinationPath = (Get-Location).Path
+            }
+            $Null = $ec.DeserializeTo("$DestinationPath")
+        }
+    }catch{
+        Write-Error $_ 
     }
 }

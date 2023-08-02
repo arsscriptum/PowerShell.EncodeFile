@@ -27,30 +27,11 @@ function Test-NewTestFiles() {
 }
 
 
-function Test-NewEncodedObject([string]$ScriptPath,[string]$DataFilePath) {
 
-    $ec = [EncodedDataFile]::new()
-    Write-Host "Create with $ScriptPath, $DataFilePath" -f DarkYellow
-    $Null = $ec.Serialize("$ScriptPath","$DataFilePath")
-    $Null = mkdir "$PSScriptRoot\out" -Force -EA Ignore
-    $SavedDataFile = "$PSScriptRoot\out\encoded_file.data"
-    $SaveSuccess = $ec.Save($SavedDataFile)
-    Write-Host "Saved with $SavedDataFile => $SaveSuccess" -f DarkYellow
-    #$ec.Dump()
-    return $SavedDataFile
-}
-
-function Test-ReadEncodedObject([string]$SavedDataFile) {
-
-
-    $ec = [EncodedDataFile]::new()
-    $LoadSuccess = $ec.Load($SavedDataFile)
-    Write-Host "Loaded $SavedDataFile => $LoadSuccess" -f DarkYellow
-    $Null = $ec.Deserialize("$PSScriptRoot\Deserialized")
-}
 
 [PsCustomObject]$TestFiles = Test-NewTestFiles 
 
-$SavedDataFile = Test-NewEncodedObject -ScriptPath "$($TestFiles.script)" -DataFilePath "$($TestFiles.data)"
-$SavedDataFile 
-#Test-ReadEncodedObject -Path $SavedDataFile
+$SavedDataFile = New-EncodedFile -ScriptPath "$($TestFiles.script)" -DataFilePath "$($TestFiles.data)"
+$Null = mkdir "$PSScriptRoot\out" -Force -EA Ignore
+Restore-EncodedFiles -Path $SavedDataFile -DestinationPath "$PSScriptRoot\out"
+Restore-EncodedFiles -Path $SavedDataFile -OverwriteOriginalFiles

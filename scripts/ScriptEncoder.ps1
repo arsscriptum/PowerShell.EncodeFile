@@ -135,28 +135,33 @@ class EncodedDataFile {
         .Parameter Path
             Directory where  files are extracted
     #>
-    [void]Deserialize() {
+    [System.Collections.ArrayList]Deserialize() {
+        
         try{
-            if([string]::IsNullOrEmpty($Path)){
-                $Path = (Get-Location).Path
-            }
-            Write-Host "[Deserialize] `"$Path`"" -f Red
-            if(-not(Test-Path $Path)){ $Null = mkdir $Path -Force -EA Ignore }
+            [System.Collections.ArrayList]$RestoredFiles = [System.Collections.ArrayList]::new()
             [string]$ScriptString = $this.DecompressBytes($this.ScriptBytes)
             [string]$ScriptLocalFile = "{0}" -f $this.ScriptFilePath
-            
+            $Null = Remove-Item -Path "$ScriptLocalFile" -Force -ErrorAction Ignore
+            $Null = New-Item -Path "$ScriptLocalFile" -ItemType file -Force -ErrorAction Ignore
             Set-Content -Path $ScriptLocalFile -Value $ScriptString -Encoding utf8 -Force
-
+            [void]$RestoredFiles.Add( $ScriptLocalFile )
             [string]$DataString = $this.DecompressBytes($this.DataBytes)
             [string]$DataLocalFile = "{0}" -f $this.DataFilePath
             
+            $Null = Remove-Item -Path "$DataLocalFile" -Force -ErrorAction Ignore
+            $Null = New-Item -Path "$DataLocalFile" -ItemType file -Force -ErrorAction Ignore
             Set-Content -Path $DataLocalFile -Value $DataString -Encoding utf8 -Force
+            [void]$RestoredFiles.Add( $DataLocalFile )
+            return $RestoredFiles
         }catch{
             Write-Error "$_"
         }  
+        return $Null
+        
     }
-    [void]DeserializeTo([string]$Path) {
+    [System.Collections.ArrayList]DeserializeTo([string]$Path) {
         try{
+            [System.Collections.ArrayList]$RestoredFiles = [System.Collections.ArrayList]::new()
             if([string]::IsNullOrEmpty($Path)){
                 $Path = (Get-Location).Path
             }
@@ -166,14 +171,17 @@ class EncodedDataFile {
             [string]$ScriptLocalFile = "{0}\{1}" -f "$Path", $this.ScriptFileName
             
             Set-Content -Path $ScriptLocalFile -Value $ScriptString -Encoding utf8 -Force
-
+            [void]$RestoredFiles.Add( $ScriptLocalFile )
             [string]$DataString = $this.DecompressBytes($this.DataBytes)
             [string]$DataLocalFile = "{0}\{1}" -f "$Path", $this.DataFileName
             
             Set-Content -Path $DataLocalFile -Value $DataString -Encoding utf8 -Force
+            [void]$RestoredFiles.Add( $DataLocalFile )
+            return $RestoredFiles
         }catch{
             Write-Error "$_"
         }  
+        return $Null
     }
     <#
         .Synopsis
@@ -270,7 +278,7 @@ function New-EncodedFile {
         Write-Verbose "Create encoded file with `n - `"$ScriptPath`"`n - `"$DataFilePath`""
         $Null = $ec.Serialize("$ScriptPath","$DataFilePath")
         
-        $SavedDataFile = "$ScriptPath" += '.encoded'
+        $SavedDataFile = "$ScriptPath" + '.encoded'
         $SaveSuccess = $ec.Save($SavedDataFile)
         Write-Verbose "Saved with $SavedDataFile => $SaveSuccess"
         
@@ -293,18 +301,21 @@ function Restore-EncodedFiles {
     ) 
 
     Try{
+        [System.Collections.ArrayList]$RestoredFiles = [System.Collections.ArrayList]::new()
         $ec = [EncodedDataFile]::new()
         $LoadSuccess = $ec.Load($Path)
         Write-Verbose "Loaded $Path => $LoadSuccess"
         if($OverwriteOriginalFiles){
-            $Null = $ec.Deserialize()
+            $RestoredFiles = $ec.Deserialize()
         }else{
             if([string]::IsNullOrEmpty($Path) -eq $True){
                 $DestinationPath = (Get-Location).Path
             }
-            $Null = $ec.DeserializeTo("$DestinationPath")
+            $RestoredFiles = $ec.DeserializeTo("$DestinationPath")
         }
+        return $RestoredFiles
     }catch{
         Write-Error $_ 
-    }
+    }   
+    return $Null
 }

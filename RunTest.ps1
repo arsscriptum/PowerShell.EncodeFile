@@ -9,16 +9,12 @@
 $EncodedFileClassScript = (Resolve-Path "$PSScriptRoot\scripts\ScriptEncoder.ps1").Path
 . "$EncodedFileClassScript"
 
-function Test-NewTestFiles() {
-
-    $Path = "$PSScriptRoot\test"
+function Test-NewTestFiles([string]$Path) {
     if(-not(Test-Path $Path)){ $Null = mkdir $Path -Force -EA Ignore }
     $BigScriptPath = "$Path\BigScript.ps1"
     $BigDataFilePath = "$Path\DataFile.txt"
     Set-Content -Path $BigScriptPath -Value ([string]::new('a',8096))
-    Write-Host "Wrote `"$BigScriptPath`" " -f DarkYellow
     Set-Content -Path $BigDataFilePath -Value ([string]::new('z',16192))
-    Write-Host "Wrote `"$BigDataFilePath`" " -f DarkYellow
     $o = [PsCustomObject]@{
         data = $BigDataFilePath
         script = $BigScriptPath
@@ -26,12 +22,31 @@ function Test-NewTestFiles() {
     return $o
 }
 
+function Start-EncodeTest {
 
+    [PsCustomObject]$TestFiles = Test-NewTestFiles -Path "$PSScriptRoot\test"
 
+    Write-Host "[New-EncodedFile] using `n - `"$($TestFiles.script)`"`n - `"$($TestFiles.data)`"" -f DarkYellow
+    $SavedDataFile = New-EncodedFile -ScriptPath "$($TestFiles.script)" -DataFilePath "$($TestFiles.data)"
 
-[PsCustomObject]$TestFiles = Test-NewTestFiles 
+    $Null = Remove-Item -Path @("$($TestFiles.script)","$($TestFiles.data)") -Recurse -Verbose -Force -ErrorAction Ignore
+                
+    $Files = Restore-EncodedFiles -Path $SavedDataFile -OverwriteOriginalFiles
+    Write-Host "[New-EncodedFile] Restored:" -f DarkYellow
+    $Files.ForEach({
+        Write-Host " - `"$($_)`"`n" -f Cyan -n
+    })
 
-$SavedDataFile = New-EncodedFile -ScriptPath "$($TestFiles.script)" -DataFilePath "$($TestFiles.data)"
-$Null = mkdir "$PSScriptRoot\out" -Force -EA Ignore
-Restore-EncodedFiles -Path $SavedDataFile -DestinationPath "$PSScriptRoot\out"
-Restore-EncodedFiles -Path $SavedDataFile -OverwriteOriginalFiles
+    $Null = mkdir "$PSScriptRoot\out" -Force -EA Ignore
+    $Files = Restore-EncodedFiles -Path $SavedDataFile -DestinationPath "$PSScriptRoot\out"
+    Write-Host "[New-EncodedFile] Restored:" -f DarkYellow
+    $Files.ForEach({
+        Write-Host " - `"$($_)`"`n" -f Cyan -n
+    })
+}
+
+Start-EncodeTest 
+
+Read-Host "Press a Key to Continue, terminate the test and delete the files...."
+
+$Null = Remove-Item -Path @("$PSScriptRoot\out", "$PSScriptRoot\test","$($TestFiles.script)","$($TestFiles.data)") -Recurse -Verbose -Force -ErrorAction Ignore

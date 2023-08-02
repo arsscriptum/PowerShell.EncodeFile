@@ -8,3 +8,7 @@ deserialized/**
 deserialized
 test
 test/**
+original
+original/**
+extracted
+extracted/**

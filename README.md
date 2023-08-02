@@ -61,8 +61,15 @@ The script will parse this text and extract the image the it uses in it's code.
      . .\test\Test-RunImageLauncher.ps1
 ```
 
+### DEMO 1
 
 ![Demo](doc/demo.gif)
+
+
+### DEMO 2
+
+![Demo](doc/demo_img.gif)
+
 
 
 ## Script Encoder - Simple Packager
@@ -89,3 +96,5 @@ To get the files back from the encoded file
   # extract and overwrite originals.
   Restore-EncodedFiles -Path $SavedDataFile -OverwriteOriginalFiles
 ```
+
+

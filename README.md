@@ -45,11 +45,22 @@ The function ```ConvertFrom-HeaderBlock``` takes a file path, then:
 6. convert to text if required
 
 
-### Test
+### Test - Converter
 
 ```
     . .\test\Test-ConvertScriptToHeader.ps1 -Verbose
 ```
+
+### Test - Embedded Resources - Images
+
+Here's a fun test, this function will generate a header block based on a JPG image file and include that text in the script.
+The script will parse this text and extract the image the it uses in it's code.
+
+
+```
+     . .\test\Test-RunImageLauncher.ps1
+```
+
 
 
 ## Script Encoder - Simple Packager

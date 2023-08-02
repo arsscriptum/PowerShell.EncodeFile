@@ -1,0 +1,10 @@
+out
+out/**
+bin/**
+bin
+tmp
+tmp/**
+deserialized/**
+deserialized
+test
+test/**

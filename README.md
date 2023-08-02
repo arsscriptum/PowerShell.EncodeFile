@@ -98,3 +98,10 @@ To get the files back from the encoded file
 ```
 
 
+
+### Encoding a Text file
+
+To show what the HEADER looks like...
+
+![Demo](doc/demo_1.gif)
+

@@ -21,10 +21,12 @@ These 2 functions are used to include a file (scripts, binary, etc) as a resourc
 
 The function ```ConvertTo-HeaderBlock``` takes a file path, then:
 
-1. will get all the characters with encoding 'UTF8', and convert them to a byte array
-2. compress the byte array using GZIP
-3. convert the data to Base 64 for text representation
-4. split the data in similar subgroups to have a pretty header block
+1. get all  the bytes from the file
+2. detect if the file is binary or text
+3. create a header including the file format and byte array size
+4. compress the byte array, including header using GZIP
+5. convert the data to Base 64 for text representation
+6. split the data in similar subgroups to have a pretty header block
 
 All you need to do afterwards is to include that block of text whereever you want in the file of your choice.
 
@@ -38,4 +40,39 @@ The function ```ConvertFrom-HeaderBlock``` takes a file path, then:
 1. locate the text block that contains the resource in the file specified.
 2. convert Base64 to byte array
 3. decompress the bytes using GZIP
-4. convert back to text
+4. read the header including the file format and byte array size
+5. get the raw byte array
+6. convert to text if required
+
+
+### Test
+
+```
+    . .\test\Test-ConvertScriptToHeader.ps1 -Verbose
+```
+
+
+## Script Encoder - Simple Packager
+
+Takes 2 file and file bundle them together into one binary, compressed, data file. I contains the file data and their names and path. You can
+deserialized them in a separate folder or deserialize them o overwrite the original if you want.
+
+### How to use
+
+```
+  $MyScript = "c:\script.ps1"
+  $DataFile = "c:\results.json"
+
+  # create an encoded file with the script and the results file
+  $SavedDataFile = New-EncodedFile -ScriptPath $MyScript -DataFilePath $DataFile
+```
+
+To get the files back from the encoded file
+
+```
+  $null = mkdir "$pwd\out" -Force -ea Ignore
+  # extract in directory I specified
+  Restore-EncodedFiles -Path $SavedDataFile -DestinationPath "$pwd\out"
+  # extract and overwrite originals.
+  Restore-EncodedFiles -Path $SavedDataFile -OverwriteOriginalFiles
+```
